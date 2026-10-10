@@ -4,5 +4,6 @@ node_modules/
 data/
 data-test/
 *.exe
+*.exe~
 *.log
 .env
