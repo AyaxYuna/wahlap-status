@@ -32,6 +32,8 @@
 | GET | `/api/incidents` | 故障事件:`{incidents[{start_ts,end_ts,duration_sec,worst_verdict,verdict_text,ongoing}],count}`。verdict 非 `normal` 的连续点位即记为一段事件 |
 | GET | `/api/latency/stats?hours=24` | 延迟分位:`{min,p50,p90,p99,max,avg,current,count}`,`hours` 最大 168 |
 | GET | `/api/reports/trend?limit=288` | 上报趋势:`{trend[{ts,anomaly,normal}]}`,按时间正序,方便直接画线 |
+| GET | `/api/services/availability?hours=12` | 各服务可用率:48 柱 `{buckets[{ts,ratio}]}` + 各服务 `{key,name,availability_pct,avg_latency_ms,checks}` |
+| GET | `/api/services/latency?hours=24` | 各服务延迟序列(自动降采样):`{services[{key,name,series[[ts,ms]]}]}`,供图表概览多线图 |
 | GET | `/api/overview` | 聚合看板:状态原字段 + `history_summary` + `latency_stats` + `ongoing_incidents`,首页一次请求即可渲染 |
 
 ## 4. 实时推送

@@ -165,15 +165,35 @@ func fetchUpstream(ctx context.Context, url string) (body []byte, status int, er
 
 // ---------- history store (JSONL) ----------
 
+type historySvc struct {
+	Key     string `json:"key"`
+	State   string `json:"state"`
+	Latency *int   `json:"latency_ms"`
+}
+
 type historyPoint struct {
-	Ts          int64  `json:"ts"`
-	Verdict     string `json:"verdict"`
-	VerdictText string `json:"verdict_text"`
-	LatencyMs   *int   `json:"latency_ms"`
-	Anomaly     int    `json:"anomaly"`
-	Normal      int    `json:"normal"`
-	OkCount     int    `json:"ok_count"`
-	DownCount   int    `json:"down_count"`
+	Ts          int64        `json:"ts"`
+	Verdict     string       `json:"verdict"`
+	VerdictText string       `json:"verdict_text"`
+	LatencyMs   *int         `json:"latency_ms"`
+	Anomaly     int          `json:"anomaly"`
+	Normal      int          `json:"normal"`
+	OkCount     int          `json:"ok_count"`
+	DownCount   int          `json:"down_count"`
+	Services    []historySvc `json:"services,omitempty"`
+}
+
+// 服务 key → 中文名(历史点位只存 key,展示时还原)
+var serviceNames = map[string]string{
+	"net": "NET", "aime": "会员", "title": "标题",
+	"member": "公众号(NET)", "qr": "公众号(二维码)", "bl": "计费",
+}
+
+func serviceName(key string) string {
+	if n, ok := serviceNames[key]; ok {
+		return n
+	}
+	return key
 }
 
 type botStatus struct {
@@ -203,17 +223,19 @@ func appendHistory(dataDir string, body []byte, max int) {
 		return
 	}
 	ok, down := 0, 0
+	svcs := make([]historySvc, 0, len(s.Services))
 	for _, sv := range s.Services {
 		if sv.State == "ok" {
 			ok++
 		} else if sv.State == "down" {
 			down++
 		}
+		svcs = append(svcs, historySvc{Key: sv.Key, State: sv.State, Latency: sv.Latency})
 	}
 	p := historyPoint{
 		Ts: time.Now().UnixMilli(), Verdict: s.Verdict, VerdictText: s.VerdictText,
 		LatencyMs: s.Latency.CurrentMs, Anomaly: s.Reports.AnomalyCount,
-		Normal: s.Reports.NormalCount, OkCount: ok, DownCount: down,
+		Normal: s.Reports.NormalCount, OkCount: ok, DownCount: down, Services: svcs,
 	}
 	line, _ := json.Marshal(p)
 
@@ -557,6 +579,118 @@ func main() {
 			trend = append(trend, map[string]any{"ts": p.Ts, "anomaly": p.Anomaly, "normal": p.Normal})
 		}
 		writeJSON(w, 200, map[string]any{"trend": trend})
+	})
+
+	// 各服务可用率:buckets 为窗口内可用率柱,services 为各服务百分比
+	mux.HandleFunc("GET /api/services/availability", func(w http.ResponseWriter, r *http.Request) {
+		hours, _ := strconv.Atoi(r.URL.Query().Get("hours"))
+		if hours <= 0 || hours > 168 {
+			hours = 12
+		}
+		const nBuckets = 48
+		now := time.Now().UnixMilli()
+		start := now - int64(hours)*3600*1000
+		span := float64(now - start)
+		okB := make([]int, nBuckets)
+		totB := make([]int, nBuckets)
+		type agg struct {
+			ok, tot, latSum, latN int
+		}
+		bySvc := map[string]*agg{}
+		order := []string{}
+		for _, p := range readHistoryAsc(cfg.dataDir, 0) {
+			if p.Ts < start || len(p.Services) == 0 {
+				continue
+			}
+			b := int(float64(p.Ts-start) / span * nBuckets)
+			if b >= nBuckets {
+				b = nBuckets - 1
+			}
+			for _, s := range p.Services {
+				a, seen := bySvc[s.Key]
+				if !seen {
+					a = &agg{}
+					bySvc[s.Key] = a
+					order = append(order, s.Key)
+				}
+				a.tot++
+				totB[b]++
+				if s.State == "ok" {
+					a.ok++
+					okB[b]++
+				}
+				if s.Latency != nil {
+					a.latSum += *s.Latency
+					a.latN++
+				}
+			}
+		}
+		buckets := make([]map[string]any, nBuckets)
+		for i := 0; i < nBuckets; i++ {
+			ratio := 1.0
+			if totB[i] > 0 {
+				ratio = float64(okB[i]) / float64(totB[i])
+			}
+			buckets[i] = map[string]any{"ts": start + int64(float64(i)*span/nBuckets), "ratio": ratio}
+		}
+		svcs := []map[string]any{}
+		for _, k := range order {
+			a := bySvc[k]
+			avg := 0
+			if a.latN > 0 {
+				avg = a.latSum / a.latN
+			}
+			pct := 100.0
+			if a.tot > 0 {
+				pct = float64(a.ok) / float64(a.tot) * 100
+			}
+			svcs = append(svcs, map[string]any{
+				"key": k, "name": serviceName(k),
+				"availability_pct": fmt.Sprintf("%.1f", pct), "avg_latency_ms": avg, "checks": a.tot,
+			})
+		}
+		writeJSON(w, 200, map[string]any{"hours": hours, "buckets": buckets, "services": svcs})
+	})
+
+	// 各服务延迟序列:供图表概览画多线图,自动降采样
+	mux.HandleFunc("GET /api/services/latency", func(w http.ResponseWriter, r *http.Request) {
+		hours, _ := strconv.Atoi(r.URL.Query().Get("hours"))
+		if hours <= 0 || hours > 168 {
+			hours = 24
+		}
+		maxPts, _ := strconv.Atoi(r.URL.Query().Get("maxpoints"))
+		if maxPts <= 0 || maxPts > 1000 {
+			maxPts = 240
+		}
+		cutoff := time.Now().Add(-time.Duration(hours) * time.Hour).UnixMilli()
+		var pts []historyPoint
+		for _, p := range readHistoryAsc(cfg.dataDir, 0) {
+			if p.Ts >= cutoff && len(p.Services) > 0 {
+				pts = append(pts, p)
+			}
+		}
+		step := 1
+		if len(pts) > maxPts {
+			step = (len(pts) + maxPts - 1) / maxPts
+		}
+		series := map[string][][2]int64{}
+		order := []string{}
+		for i := 0; i < len(pts); i += step {
+			for _, s := range pts[i].Services {
+				if s.Latency == nil {
+					continue
+				}
+				if _, ok := series[s.Key]; !ok {
+					order = append(order, s.Key)
+				}
+				series[s.Key] = append(series[s.Key], [2]int64{pts[i].Ts, int64(*s.Latency)})
+			}
+		}
+		out := []map[string]any{}
+		for _, k := range order {
+			out = append(out, map[string]any{"key": k, "name": serviceName(k), "series": series[k]})
+		}
+		writeJSON(w, 200, map[string]any{"hours": hours, "services": out})
 	})
 
 	// 聚合看板:一次请求拿到状态 + 历史摘要 + 延迟分位 + 进行中的事件

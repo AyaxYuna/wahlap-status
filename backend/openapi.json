@@ -70,6 +70,23 @@
         "responses": { "200": { "description": "{trend[{ts, anomaly, normal}]}" } }
       }
     },
+    "/api/services/availability": {
+      "get": {
+        "summary": "各服务可用率:48 柱可用率 + 各服务百分比",
+        "parameters": [{ "name": "hours", "in": "query", "schema": { "type": "integer", "default": 12, "maximum": 168 } }],
+        "responses": { "200": { "description": "{hours, buckets[{ts, ratio}], services[{key, name, availability_pct, avg_latency_ms, checks}]}" } }
+      }
+    },
+    "/api/services/latency": {
+      "get": {
+        "summary": "各服务延迟序列(自动降采样,供多线图)",
+        "parameters": [
+          { "name": "hours", "in": "query", "schema": { "type": "integer", "default": 24, "maximum": 168 } },
+          { "name": "maxpoints", "in": "query", "schema": { "type": "integer", "default": 240, "maximum": 1000 } }
+        ],
+        "responses": { "200": { "description": "{hours, services[{key, name, series[[ts, ms]]}]}" } }
+      }
+    },
     "/api/overview": {
       "get": { "summary": "聚合看板:状态 + 历史摘要 + 延迟分位 + 进行中的事件,一次请求", "responses": { "200": { "description": "状态字段 + history_summary + latency_stats + ongoing_incidents" } } }
     },

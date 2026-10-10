@@ -173,6 +173,12 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
   border: 1px solid rgba(255, 216, 77, 0.4); background: rgba(255, 216, 77, 0.08);
   border-radius: 14px; padding: 14px 18px; margin-bottom: 16px; font-size: 14px;
 }
+
+/* 可用性虚线条 + 图例 */
+.avail-row { display: grid; grid-template-columns: 130px 62px 1fr; gap: 10px; align-items: center; padding: 6px 0; font-size: 13px; }
+.dotbar { height: 8px; border-radius: 999px; background: repeating-linear-gradient(90deg, currentColor 0 5px, transparent 5px 10px); opacity: 0.9; min-width: 4px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
 .loading, .error { text-align: center; padding: 60px 20px; color: var(--muted); }
 .error { color: var(--red); }
 .retry {
