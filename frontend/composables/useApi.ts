@@ -31,9 +31,10 @@ export async function apiGet<T>(path: string, query?: Record<string, string>): P
   const { apiBase, upstreamBase } = useRuntimeConfig().public
   try {
     return await $fetch<T>(path, { baseURL: apiBase as string, query })
-  } catch {
-    // 网关未启动时直连上游(静态接口与状态接口路径兼容)
-    const upstream = UPSTREAM_PATHS[path] ?? path
+  } catch (e) {
+    // 仅上游真实存在的接口才直连兜底;网关专有接口(历史/统计类)直接抛错,不打扰上游
+    const upstream = UPSTREAM_PATHS[path]
+    if (!upstream) throw e
     return await $fetch<T>(upstream, { baseURL: upstreamBase as string, query })
   }
 }
