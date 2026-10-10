@@ -13,7 +13,7 @@
       </div>
       <div class="card">
         <h3>{{ cur.label }} · 每 100 Rating 一段</h3>
-        <div v-for="b in cur.data" :key="b.bucket" class="bar-row">
+        <div v-for="b in sortedData" :key="b.bucket" class="bar-row">
           <span class="dim">{{ b.bucket }}–{{ b.bucket + 99 }}</span>
           <div class="bar-track"><div class="bar-fill" :style="{ width: (b.count / maxCount * 100).toFixed(1) + '%' }"></div></div>
           <span style="text-align:right">{{ fmtNum(b.count) }}</span>
@@ -35,6 +35,8 @@ const error = ref('')
 
 const cur = computed<Ver>(() => versions.value.find(v => v.key === curKey.value) || { key: '', label: '', total: 0, data: [] })
 const maxCount = computed(() => Math.max(1, ...cur.value.data.map(b => b.count)))
+// 从高到低展示
+const sortedData = computed(() => [...cur.value.data].sort((a, b) => b.bucket - a.bucket))
 
 async function load() {
   loading.value = true
