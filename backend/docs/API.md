@@ -71,7 +71,7 @@ es.addEventListener('status', e => render(JSON.parse(e.data)))
 | GET | `/api/lxns/scores` | 个人全部成绩透传(需 `X-Session`) |
 | POST | `/api/lxns/logout` | 删除 session |
 
-前端页面:`/player`(查分:玩家卡 + Best50 + 搜索)+ `/lxns-callback`(回调落地)。
+前端页面:`/player`(查分:玩家卡 + Best50 + 搜索)+ `/lxns-fallback`(回调落地,须与登记地址同名)。
 
 ## 错误格式
 

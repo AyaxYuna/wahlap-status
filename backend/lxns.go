@@ -31,8 +31,8 @@ func loadLxnsConfig() lxnsConfig {
 	return lxnsConfig{
 		clientID:     os.Getenv("LXNS_CLIENT_ID"),
 		clientSecret: os.Getenv("LXNS_CLIENT_SECRET"),
-		redirectURI:  getenv("LXNS_REDIRECT_URI", "http://localhost:3000/lxns-callback"),
-		scopes:       getenv("LXNS_SCOPES", "openid profile read_player read_user_profile"),
+		redirectURI:  getenv("LXNS_REDIRECT_URI", "http://localhost:3000/lxns-fallback"),
+		scopes:       getenv("LXNS_SCOPES", "read_user_profile write_player read_player"),
 		base:         getenv("LXNS_BASE", "https://maimai.lxns.net"),
 	}
 }
@@ -294,6 +294,9 @@ func handleLxnsCallback(cfg lxnsConfig, store *lxnsStore) http.HandlerFunc {
 			if sess.Name == "" {
 				sess.Name, _ = userinfo["name"].(string)
 			}
+		}
+		if sess.Name == "" && player != nil {
+			sess.Name, _ = player["name"].(string) // 未申请 openid 时用玩家名兜底
 		}
 		store.mu.Lock()
 		store.sessions[sid] = sess
