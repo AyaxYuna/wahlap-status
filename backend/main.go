@@ -452,7 +452,7 @@ func withCORS(corsAllow string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", corsAllow)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Client-ID, X-Timestamp, X-Signature")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Client-ID, X-Timestamp, X-Signature, X-Session")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -764,6 +764,15 @@ func main() {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Write(openapiSpec)
 	})
+
+	// 落雪查分器 OAuth(机密客户端,密钥只在网关侧)
+	lxnsCfg := loadLxnsConfig()
+	lxnsStore := newLxnsStore(cfg.dataDir)
+	mux.HandleFunc("GET /api/lxns/auth-url", handleLxnsAuthURL(lxnsCfg))
+	mux.HandleFunc("GET /api/lxns/callback", handleLxnsCallback(lxnsCfg, lxnsStore))
+	mux.HandleFunc("GET /api/lxns/me", handleLxnsMe(lxnsCfg, lxnsStore))
+	mux.HandleFunc("GET /api/lxns/scores", handleLxnsScores(lxnsCfg, lxnsStore))
+	mux.HandleFunc("POST /api/lxns/logout", handleLxnsLogout(lxnsStore))
 
 	// 上报转发:透传签名头到上游 bot-post,Body 限 1MB
 	mux.HandleFunc("POST /api/report", func(w http.ResponseWriter, r *http.Request) {

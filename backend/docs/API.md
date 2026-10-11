@@ -59,6 +59,20 @@ es.addEventListener('status', e => render(JSON.parse(e.data)))
 | GET | `/healthz` | `{ok:true,time}` |
 | GET | `/api/openapi.json` | OpenAPI 3.0 规格 |
 
+## 6. 落雪查分器 OAuth(需先配置 LXNS_CLIENT_ID 等,见 backend/.env.example)
+
+机密客户端跑在网关侧:PKCE + state 校验、token 兑换、refresh 自动轮换(30 天)、session 落盘。浏览器只持有 `X-Session`,密钥不出网关。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/lxns/auth-url` | 生成授权链接 `{auth_url}`,前端跳转即可 |
+| GET | `/api/lxns/callback?code=&state=` | 回调兑换,返回 `{session,user,player}`,前端存 localStorage 后进 `/player` |
+| GET | `/api/lxns/me` | 用户与玩家信息(需 `X-Session`,access 过期自动用 refresh 续) |
+| GET | `/api/lxns/scores` | 个人全部成绩透传(需 `X-Session`) |
+| POST | `/api/lxns/logout` | 删除 session |
+
+前端页面:`/player`(查分:玩家卡 + Best50 + 搜索)+ `/lxns-callback`(回调落地)。
+
 ## 错误格式
 
 上游不可达时返回 `502 {"error":"upstream unreachable","detail":"..."}`;参数错误返回 `400 {"error":"..."}`。

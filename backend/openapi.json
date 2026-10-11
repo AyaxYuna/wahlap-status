@@ -107,6 +107,36 @@
     },
     "/api/openapi.json": {
       "get": { "summary": "本 OpenAPI 规格", "responses": { "200": { "description": "ok" } } }
+    },
+    "/api/lxns/auth-url": {
+      "get": { "summary": "生成落雪 OAuth 授权链接(PKCE,state 服务端暂存)", "responses": { "200": { "description": "{auth_url}" } } }
+    },
+    "/api/lxns/callback": {
+      "get": {
+        "summary": "授权回调:校验 state 并兑换 token,创建 session",
+        "parameters": [
+          { "name": "code", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "state", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "{session, user, player}" } }
+      }
+    },
+    "/api/lxns/me": {
+      "get": {
+        "summary": "当前登录用户与玩家信息(需 X-Session,自动刷新 token)",
+        "parameters": [{ "name": "X-Session", "in": "header", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "{user, player, session, scope}" } }
+      }
+    },
+    "/api/lxns/scores": {
+      "get": {
+        "summary": "个人全部成绩透传(需 X-Session)",
+        "parameters": [{ "name": "X-Session", "in": "header", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "落雪 {success, code, data: Score[]} 原样" } }
+      }
+    },
+    "/api/lxns/logout": {
+      "post": { "summary": "退出并删除 session", "responses": { "200": { "description": "{ok:true}" } } }
     }
   }
 }

@@ -51,6 +51,8 @@
           <tr><td>GET</td><td><code class="inline">/api/overview</code></td><td>聚合看板:状态 + 摘要 + 分位 + 进行中事件</td></tr>
           <tr><td>GET</td><td><code class="inline">/api/stream</code></td><td>SSE 实时推送(EventSource 订阅)</td></tr>
           <tr><td>GET</td><td><code class="inline">/api/openapi.json</code></td><td>OpenAPI 3.0 规格</td></tr>
+          <tr><td>GET</td><td><code class="inline">/api/lxns/auth-url</code></td><td>落雪 OAuth 授权链接</td></tr>
+          <tr><td>GET</td><td><code class="inline">/api/lxns/me · /api/lxns/scores</code></td><td>登录用户与成绩(需 X-Session)</td></tr>
           <tr><td>POST</td><td><code class="inline">/api/report</code></td><td>上报透传(需带 X-Client-ID / X-Timestamp / X-Signature)</td></tr>
         </tbody>
       </table>

@@ -12,6 +12,7 @@
           <NuxtLink to="/top100">全服乐曲</NuxtLink>
           <NuxtLink to="/ratinglist">全服排行</NuxtLink>
           <NuxtLink to="/chart145">越级排行</NuxtLink>
+          <NuxtLink to="/player">查分</NuxtLink>
           <NuxtLink to="/about">关于/文档</NuxtLink>
         </div>
       </div>
