@@ -69,6 +69,9 @@ es.addEventListener('status', e => render(JSON.parse(e.data)))
 | GET | `/api/lxns/callback?code=&state=` | 回调兑换,返回 `{session,user,player}`,前端存 localStorage 后进 `/player` |
 | GET | `/api/lxns/me` | 用户与玩家信息(需 `X-Session`,access 过期自动用 refresh 续) |
 | GET | `/api/lxns/scores` | 个人全部成绩透传(需 `X-Session`) |
+| GET | `/api/lxns/b50` | Best50 计算(需 `X-Session`):`{standard_total,dx_total,standard(旧35),dx(新15)}`,按曲目版本划分,宴会场剔除 |
+| POST | `/api/lxns/scores` | 成绩上传(需 `X-Session` + `write_player` 权限),Body `{scores:[...]}` 透传 |
+| GET | `/api/lxns/songs` | 公开曲目列表(1h 缓存,无需登录) |
 | POST | `/api/lxns/logout` | 删除 session |
 
 前端页面:`/player`(查分:玩家卡 + Best50 + 搜索)+ `/lxns-fallback`(回调落地,须与登记地址同名)。

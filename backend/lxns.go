@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -15,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 )
@@ -362,6 +364,245 @@ func handleLxnsScores(cfg lxnsConfig, store *lxnsStore) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(st)
+		w.Write(rb)
+	}
+}
+
+// ---------- Best50 计算(个人成绩 + 公开曲目版本划分新旧) ----------
+
+var songsCacheMu sync.Mutex
+var songsCacheBody []byte
+var songsCacheAt time.Time
+
+func fetchLxnsSongList(cfg lxnsConfig) ([]byte, error) {
+	songsCacheMu.Lock()
+	if time.Since(songsCacheAt) < time.Hour && songsCacheBody != nil {
+		defer songsCacheMu.Unlock()
+		return songsCacheBody, nil
+	}
+	songsCacheMu.Unlock()
+	st, rb, err := lxnsAPIGet(cfg, "", "/api/v0/maimai/song/list")
+	if err != nil || st != 200 {
+		// 公开接口无需 token,上面只是复用 GET;失败则裸 GET 重试
+		body, status, ferr := fetchUpstream(context.Background(), cfg.base+"/api/v0/maimai/song/list")
+		if ferr != nil || status != 200 {
+			return nil, fmt.Errorf("song list unreachable")
+		}
+		rb = body
+	}
+	songsCacheMu.Lock()
+	songsCacheBody, songsCacheAt = rb, time.Now()
+	songsCacheMu.Unlock()
+	return rb, nil
+}
+
+// pickData 兼容 {success,data} 包裹与裸结构
+func pickData(raw []byte) map[string]any {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil
+	}
+	if d, ok := m["data"].(map[string]any); ok {
+		return d
+	}
+	return m
+}
+
+func pickList(raw []byte) []any {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil
+	}
+	if d, ok := m["data"].([]any); ok {
+		return d
+	}
+	if arr, ok := any(m).([]any); ok {
+		return arr
+	}
+	var arr []any
+	if err := json.Unmarshal(raw, &arr); err == nil {
+		return arr
+	}
+	return nil
+}
+
+func f64(v any) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	}
+	return 0
+}
+
+func i64(v any) int64 {
+	switch n := v.(type) {
+	case float64:
+		return int64(n)
+	case int:
+		return int64(n)
+	case int64:
+		return n
+	}
+	return 0
+}
+
+// computeB50 按曲目版本划分新旧(现版本 = 版本号最大者),旧取 35、新取 15
+func computeB50(scoresBody, songsBody []byte) ([]byte, error) {
+	songs := pickData(songsBody)
+	verOf := map[int64]int64{}
+	current := int64(0)
+	if vl, ok := songs["versions"].([]any); ok {
+		for _, v := range vl {
+			if vm, ok := v.(map[string]any); ok {
+				if vv := i64(vm["version"]); vv > current {
+					current = vv
+				}
+			}
+		}
+	}
+	if sl, ok := songs["songs"].([]any); ok {
+		for _, s := range sl {
+			if sm, ok := s.(map[string]any); ok {
+				verOf[i64(sm["id"])] = i64(sm["version"])
+			}
+		}
+	}
+	var std, dx []any
+	for _, s := range pickList(scoresBody) {
+		sm, ok := s.(map[string]any)
+		if !ok {
+			continue
+		}
+		id := i64(sm["id"])
+		if id > 100000 {
+			continue // 宴会场不计入 B50
+		}
+		if t, _ := sm["type"].(string); t == "utage" {
+			continue
+		}
+		if verOf[id] == current && current != 0 {
+			dx = append(dx, sm)
+		} else {
+			std = append(std, sm)
+		}
+	}
+	byRating := func(a, b any) bool {
+		return f64(a.(map[string]any)["dx_rating"]) > f64(b.(map[string]any)["dx_rating"])
+	}
+	sort.Slice(std, func(i, j int) bool { return byRating(std[i], std[j]) })
+	sort.Slice(dx, func(i, j int) bool { return byRating(dx[i], dx[j]) })
+	if len(std) > 35 {
+		std = std[:35]
+	}
+	if len(dx) > 15 {
+		dx = dx[:15]
+	}
+	if std == nil {
+		std = []any{}
+	}
+	if dx == nil {
+		dx = []any{}
+	}
+	sum := func(l []any) int {
+		t := 0
+		for _, s := range l {
+			t += int(f64(s.(map[string]any)["dx_rating"]))
+		}
+		return t
+	}
+	return json.Marshal(map[string]any{
+		"standard_total": sum(std), "dx_total": sum(dx),
+		"standard": std, "dx": dx,
+	})
+}
+
+func handleLxnsB50(cfg lxnsConfig, store *lxnsStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		sess := sessionFromRequest(r, store)
+		if sess == nil {
+			writeJSON(w, 401, map[string]any{"error": "missing or invalid X-Session"})
+			return
+		}
+		if err := store.ensureAccess(cfg, sess); err != nil {
+			writeJSON(w, 401, map[string]any{"error": "session expired, please login again"})
+			return
+		}
+		store.mu.Lock()
+		access := sess.accessToken
+		store.mu.Unlock()
+		st, scoresBody, err := lxnsAPIGet(cfg, access, "/api/v0/user/maimai/player/scores")
+		if err != nil || st != 200 {
+			writeJSON(w, 502, map[string]any{"error": "lxns scores unreachable"})
+			return
+		}
+		songsBody, err := fetchLxnsSongList(cfg)
+		if err != nil {
+			writeJSON(w, 502, map[string]any{"error": "lxns song list unreachable"})
+			return
+		}
+		out, err := computeB50(scoresBody, songsBody)
+		if err != nil {
+			writeJSON(w, 502, map[string]any{"error": "b50 compute failed", "detail": err.Error()})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Write(out)
+	}
+}
+
+// 成绩上传(write_player):Body {scores:[...]} 原样透传
+func handleLxnsUploadScores(cfg lxnsConfig, store *lxnsStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		sess := sessionFromRequest(r, store)
+		if sess == nil {
+			writeJSON(w, 401, map[string]any{"error": "missing or invalid X-Session"})
+			return
+		}
+		if err := store.ensureAccess(cfg, sess); err != nil {
+			writeJSON(w, 401, map[string]any{"error": "session expired, please login again"})
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, 4<<20))
+		if err != nil {
+			writeJSON(w, 400, map[string]any{"error": "read body failed"})
+			return
+		}
+		store.mu.Lock()
+		access := sess.accessToken
+		store.mu.Unlock()
+		req, err := http.NewRequest(http.MethodPost, cfg.base+"/api/v0/user/maimai/player/scores", bytes.NewReader(body))
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"error": err.Error()})
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+access)
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			writeJSON(w, 502, map[string]any{"error": "lxns unreachable", "detail": err.Error()})
+			return
+		}
+		defer resp.Body.Close()
+		rb, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(resp.StatusCode)
+		w.Write(rb)
+	}
+}
+
+// 公开曲目列表(1h 缓存,无需登录)
+func handleLxnsSongs(cfg lxnsConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rb, err := fetchLxnsSongList(cfg)
+		if err != nil {
+			writeJSON(w, 502, map[string]any{"error": "lxns song list unreachable"})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Write(rb)
 	}
 }

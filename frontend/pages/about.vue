@@ -53,6 +53,8 @@
           <tr><td>GET</td><td><code class="inline">/api/openapi.json</code></td><td>OpenAPI 3.0 规格</td></tr>
           <tr><td>GET</td><td><code class="inline">/api/lxns/auth-url</code></td><td>落雪 OAuth 授权链接</td></tr>
           <tr><td>GET</td><td><code class="inline">/api/lxns/me · /api/lxns/scores</code></td><td>登录用户与成绩(需 X-Session)</td></tr>
+          <tr><td>GET</td><td><code class="inline">/api/lxns/b50</code></td><td>Best50(旧35+新15,需 X-Session)</td></tr>
+          <tr><td>POST</td><td><code class="inline">/api/lxns/scores</code></td><td>成绩上传(需 write_player 权限)</td></tr>
           <tr><td>POST</td><td><code class="inline">/api/report</code></td><td>上报透传(需带 X-Client-ID / X-Timestamp / X-Signature)</td></tr>
         </tbody>
       </table>

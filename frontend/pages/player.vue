@@ -28,10 +28,20 @@
         <button class="retry" style="background:none;border:1px solid var(--card-border);color:var(--muted)" @click="logout">退出</button>
       </div>
 
-      <div v-if="scores.length" class="card" style="margin-top:16px">
-        <h3>Best 50(按 DX Rating 排序) · 共 {{ scores.length }} 条成绩</h3>
+      <div v-if="b50" class="card" style="margin-top:16px">
+        <h3>Best 50 · 现版本 {{ b50.dx_total }} / 旧版本 {{ b50.standard_total }}</h3>
         <div class="toolbar"><input v-model="q" class="search" placeholder="搜索曲名…" /></div>
-        <div v-for="s in filtered.slice(0, 50)" :key="s.id + '-' + s.type + '-' + s.level_index" class="song">
+        <h3 style="margin-top:8px">现版本 Best {{ b50.dx.length }}</h3>
+        <div v-for="s in filtered.filter(x => b50.dx.includes(x))" :key="'dx' + s.id + '-' + s.type + '-' + s.level_index" class="song">
+          <img class="cover" :src="`https://assets2.lxns.net/maimai/jacket/${s.id}.png`" :alt="s.song_name" loading="lazy" />
+          <div>
+            <div class="t">{{ s.song_name }}<span class="badge" :class="typeCls(s.type)">{{ typeText(s) }}</span></div>
+            <div class="s">{{ s.level }} · 达成率 {{ s.achievements }}% · DX {{ s.dx_score }}{{ s.fc ? ' · ' + String(s.fc).toUpperCase() : '' }}{{ s.fs ? ' · ' + String(s.fs).toUpperCase() : '' }}</div>
+          </div>
+          <div class="plays">{{ Math.floor(s.dx_rating) }}<small>{{ String(s.rate || '').toUpperCase() }}</small></div>
+        </div>
+        <h3 style="margin-top:12px">旧版本 Best {{ b50.standard.length }}</h3>
+        <div v-for="s in filtered.filter(x => b50.standard.includes(x))" :key="'std' + s.id + '-' + s.type + '-' + s.level_index" class="song">
           <img class="cover" :src="`https://assets2.lxns.net/maimai/jacket/${s.id}.png`" :alt="s.song_name" loading="lazy" />
           <div>
             <div class="t">{{ s.song_name }}<span class="badge" :class="typeCls(s.type)">{{ typeText(s) }}</span></div>
@@ -51,16 +61,16 @@ import { apiGet } from '~/composables/useApi'
 const LEVEL_NAMES = ['BASIC', 'ADV', 'EXP', 'MAS', 'ReMAS']
 const session = ref<string>(process.client ? localStorage.getItem('lxns_session') || '' : '')
 const player = ref<any>(null)
-const scores = ref<any[]>([])
+const b50 = ref<{ standard_total: number; dx_total: number; standard: any[]; dx: any[] } | null>(null)
 const q = ref('')
 const loading = ref(true)
 const error = ref('')
 
+const allScores = computed(() => [...(b50.value?.dx || []), ...(b50.value?.standard || [])])
 const filtered = computed(() => {
   const k = q.value.trim().toLowerCase()
-  const sorted = [...scores.value].sort((a, b) => (b.dx_rating || 0) - (a.dx_rating || 0))
-  if (!k) return sorted
-  return sorted.filter(s => String(s.song_name || '').toLowerCase().includes(k))
+  if (!k) return allScores.value
+  return allScores.value.filter(s => String(s.song_name || '').toLowerCase().includes(k))
 })
 function typeText(s: any) {
   const lv = LEVEL_NAMES[s.level_index] || s.level_index
@@ -87,11 +97,20 @@ async function load() {
       headers: { 'X-Session': session.value }
     })
     player.value = me.player
-    const sc = await $fetch<any>('/api/lxns/scores', {
-      baseURL: useRuntimeConfig().public.apiBase as string,
-      headers: { 'X-Session': session.value }
-    })
-    scores.value = sc?.data || []
+    try {
+      b50.value = await $fetch<any>('/api/lxns/b50', {
+        baseURL: useRuntimeConfig().public.apiBase as string,
+        headers: { 'X-Session': session.value }
+      })
+    } catch {
+      // B50 计算失败时退回全量成绩客户端排序
+      const sc = await $fetch<any>('/api/lxns/scores', {
+        baseURL: useRuntimeConfig().public.apiBase as string,
+        headers: { 'X-Session': session.value }
+      })
+      const list = [...(sc?.data || [])].sort((a, b) => (b.dx_rating || 0) - (a.dx_rating || 0))
+      b50.value = { standard_total: 0, dx_total: 0, standard: list.slice(0, 35), dx: [] }
+    }
   } catch (e: any) {
     if (e?.response?.status === 401) {
       session.value = ''
@@ -113,7 +132,7 @@ async function logout() {
   } catch {}
   session.value = ''
   player.value = null
-  scores.value = []
+  b50.value = null
   if (process.client) localStorage.removeItem('lxns_session')
 }
 onMounted(load)

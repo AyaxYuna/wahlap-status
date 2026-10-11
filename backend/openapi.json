@@ -133,7 +133,23 @@
         "summary": "个人全部成绩透传(需 X-Session)",
         "parameters": [{ "name": "X-Session", "in": "header", "required": true, "schema": { "type": "string" } }],
         "responses": { "200": { "description": "落雪 {success, code, data: Score[]} 原样" } }
+      },
+      "post": {
+        "summary": "成绩上传(需 X-Session + write_player 权限)",
+        "parameters": [{ "name": "X-Session", "in": "header", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "responses": { "200": { "description": "透传落雪响应" } }
       }
+    },
+    "/api/lxns/b50": {
+      "get": {
+        "summary": "Best50 计算(需 X-Session):旧35 + 新15,按曲目版本划分",
+        "parameters": [{ "name": "X-Session", "in": "header", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "{standard_total, dx_total, standard[], dx[]}" } }
+      }
+    },
+    "/api/lxns/songs": {
+      "get": { "summary": "公开曲目列表(1h 缓存,无需登录)", "responses": { "200": { "description": "落雪曲目列表原样" } } }
     },
     "/api/lxns/logout": {
       "post": { "summary": "退出并删除 session", "responses": { "200": { "description": "{ok:true}" } } }

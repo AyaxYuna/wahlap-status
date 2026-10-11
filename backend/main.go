@@ -772,6 +772,9 @@ func main() {
 	mux.HandleFunc("GET /api/lxns/callback", handleLxnsCallback(lxnsCfg, lxnsStore))
 	mux.HandleFunc("GET /api/lxns/me", handleLxnsMe(lxnsCfg, lxnsStore))
 	mux.HandleFunc("GET /api/lxns/scores", handleLxnsScores(lxnsCfg, lxnsStore))
+	mux.HandleFunc("GET /api/lxns/b50", handleLxnsB50(lxnsCfg, lxnsStore))
+	mux.HandleFunc("POST /api/lxns/scores", handleLxnsUploadScores(lxnsCfg, lxnsStore))
+	mux.HandleFunc("GET /api/lxns/songs", handleLxnsSongs(lxnsCfg))
 	mux.HandleFunc("POST /api/lxns/logout", handleLxnsLogout(lxnsStore))
 
 	// 上报转发:透传签名头到上游 bot-post,Body 限 1MB
