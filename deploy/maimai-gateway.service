@@ -1,0 +1,16 @@
+[Unit]
+Description=Maimai Status Gateway
+After=network.target
+
+[Service]
+Type=simple
+# 按实际修改用户与路径
+User=www-data
+WorkingDirectory=/opt/maimaistatus/backend
+EnvironmentFile=/etc/maimai-gateway.env
+ExecStart=/opt/maimaistatus/backend/gateway
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
