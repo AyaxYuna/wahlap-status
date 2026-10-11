@@ -1,7 +1,9 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
-  compatibilityDate: '2025-07-15',
+  compatibilityDate: '2025-11-01',
   devtools: { enabled: false },
+  modules: ['@nuxt/ui'],
+  devServer: { port: 9561 },
   css: ['~/assets/css/main.css'],
   app: {
     head: {
@@ -16,9 +18,17 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       // Go 网关地址,生产环境通过 NUXT_PUBLIC_API_BASE 覆盖
-      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:8080',
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:9560',
       // 网关不可用时直连上游兜底
-      upstreamBase: 'https://mai.chongxi.us'
+      upstreamBase: 'https://mai.chongxi.us',
+      // 手动上报签名密钥(发邮件至 qwq@chongxi.us 获取后填入环境变量)
+      reportClientId: process.env.NUXT_PUBLIC_REPORT_CLIENT_ID || '<your-key>',
+      reportPrivateKey: process.env.NUXT_PUBLIC_REPORT_PRIVATE_KEY || '<your-key>'
     }
+  },
+  colorMode: {
+    preference: 'system',
+    fallback: 'dark',
+    classSuffix: ''
   }
 })
