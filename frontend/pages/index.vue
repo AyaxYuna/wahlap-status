@@ -159,6 +159,12 @@
         </UCard>
       </div>
 
+      <!-- 附属区首载骨架:先占位,落定后再判空/判错 -->
+      <div v-if="extrasLoading" class="space-y-4">
+        <UCard><USkeleton class="h-56 w-full" /></UCard>
+        <UCard><USkeleton class="h-72 w-full" /></UCard>
+      </div>
+
       <!-- 网关附属区全挂:明示原因 + 重试,不再静默消失 -->
       <UAlert
         v-if="extrasDown"
@@ -237,6 +243,16 @@
         />
         <div v-else ref="repChartEl" class="w-full" style="height:280px"></div>
       </UCard>
+
+      <!-- 网关通但暂无曲线数据(新部署攒点中):明示等待,不留白 -->
+      <UAlert
+        v-else-if="!extrasLoading && !extrasDown"
+        color="neutral"
+        variant="soft"
+        icon="i-lucide-loader-circle"
+        title="图表采集中"
+        description="网关刚启动,历史数据攒点中(约 30 秒一个点),曲线稍后自动出现,无需刷新。"
+      />
 
       <ReportModal v-model:open="reportOpen" />
     </template>
@@ -382,6 +398,8 @@ const reportTrend = ref<{ ts: number; anomaly: number; normal: number }[]>([])
 const latestReport = computed(() => reportTrend.value.length ? reportTrend.value[reportTrend.value.length - 1] : null)
 // 网关附属区连通旗:全挂则 Row2/Row3 改显警告横幅,不再静默消失
 const extrasDown = ref(false)
+// 附属区首载旗:骨架占位,loadExtra 落定后才判空/判错,避免开屏闪空
+const extrasLoading = ref(true)
 
 async function loadExtra() {
   // 各端点独立结算:一个挂了不连累其他卡片
@@ -404,6 +422,7 @@ async function loadExtra() {
   }
   if (rt.status === 'fulfilled') reportTrend.value = rt.value.trend || []
   extrasDown.value = [ra, rl, rt].every(r => r.status === 'rejected')
+  extrasLoading.value = false
 }
 
 /* ---- 最近三次上报 Timeline(网关 reports 快照,后台 fetch;上游无单条接口) ---- */
