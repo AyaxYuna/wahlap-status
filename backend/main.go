@@ -643,6 +643,10 @@ func main() {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": true, "time": time.Now().Format(time.RFC3339)})
 	})
+	// 同域部署时反代只放行 /api/*,加个别名让健康检查同口径
+	mux.HandleFunc("GET /api/healthz", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{"ok": true, "time": time.Now().Format(time.RFC3339)})
+	})
 
 	// 实时状态(短缓存,高频轮询)
 	mux.HandleFunc("GET /api/status", proxyCached(c, "status", cfg.upstreamBase+"/api/bot", 20*time.Second))

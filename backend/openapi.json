@@ -14,7 +14,17 @@
   "paths": {
     "/healthz": {
       "get": {
-        "summary": "健康检查",
+        "summary": "健康检查(网关根路径)",
+        "responses": {
+          "200": {
+            "description": "ok"
+          }
+        }
+      }
+    },
+    "/api/healthz": {
+      "get": {
+        "summary": "健康检查(同域反代口径,同上)",
         "responses": {
           "200": {
             "description": "ok"

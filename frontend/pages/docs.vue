@@ -465,15 +465,15 @@ const groups: Group[] = [
   {
     id: 'ops', title: '运维', items: [
       {
-        id: 'healthz', method: 'GET', path: '/healthz', summary: '健康检查(域名根下)',
-        purpose: '网关存活探针,部署验证用。注意它不在 /api 下,完整地址 https://maimai.imikufans.cn/healthz。',
+        id: 'healthz', method: 'GET', path: '/api/healthz', summary: '健康检查(同域反代口径)',
+        purpose: '网关存活探针,部署验证用。网关原生在域名根下 /healthz,为适配同域反代只放行 /api/* 的场景,加了 /api/healthz 别名,两者等价。',
         params: noParams,
         codes: {
-          curl: `curl "https://maimai.imikufans.cn/healthz"`,
-          go: `package main\n\nimport (\n\t"fmt"\n\t"io"\n\t"log"\n\t"net/http"\n)\n\nfunc main() {\n\tresp, err := http.Get("https://maimai.imikufans.cn/healthz")\n\tif err != nil {\n\t\tlog.Fatal(err)\n\t}\n\tdefer resp.Body.Close()\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`,
-          rust: `#[tokio::main]\nasync fn main() -> Result<(), Box<dyn std::error::Error>> {\n\tlet body = reqwest::get("https://maimai.imikufans.cn/healthz").await?.text().await?;\n\tprintln!("{body}");\n\tOk(())\n}`,
-          js: `const r = await fetch('https://maimai.imikufans.cn/healthz');\nconsole.log(await r.json());`,
-          py: `import requests\n\nprint(requests.get('https://maimai.imikufans.cn/healthz', timeout=10).json())`
+          curl: `curl "https://maimai.imikufans.cn/api/healthz"`,
+          go: `package main\n\nimport (\n\t"fmt"\n\t"io"\n\t"log"\n\t"net/http"\n)\n\nfunc main() {\n\tresp, err := http.Get("https://maimai.imikufans.cn/api/healthz")\n\tif err != nil {\n\t\tlog.Fatal(err)\n\t}\n\tdefer resp.Body.Close()\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`,
+          rust: `#[tokio::main]\nasync fn main() -> Result<(), Box<dyn std::error::Error>> {\n\tlet body = reqwest::get("https://maimai.imikufans.cn/api/healthz").await?.text().await?;\n\tprintln!("{body}");\n\tOk(())\n}`,
+          js: `const r = await fetch('https://maimai.imikufans.cn/api/healthz');\nconsole.log(await r.json());`,
+          py: `import requests\n\nprint(requests.get('https://maimai.imikufans.cn/api/healthz', timeout=10).json())`
         },
         fields: [
           { name: 'ok', type: 'bool', desc: '存活' },
