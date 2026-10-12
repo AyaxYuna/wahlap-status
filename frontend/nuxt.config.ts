@@ -7,7 +7,10 @@ export default defineNuxtConfig({
     // 本站用系统字体栈(main.css 自带),不需要 Google Fonts,直接关掉 @nuxt/fonts
     fonts: false
   },
-  devServer: { port: 9561 },
+  devServer: {
+    port: 9561,
+    host: '0.0.0.0' // 局域网设备可通过宿主 IP 访问,仅监听 localhost 则公网/局域网进不来
+  },
   css: ['~/assets/css/main.css'],
   app: {
     head: {
