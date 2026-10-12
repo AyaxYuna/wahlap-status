@@ -3,6 +3,10 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-11-01',
   devtools: { enabled: false },
   modules: ['@nuxt/ui'],
+  ui: {
+    // 本站用系统字体栈(main.css 自带),不需要 Google Fonts,直接关掉 @nuxt/fonts
+    fonts: false
+  },
   devServer: { port: 9561 },
   css: ['~/assets/css/main.css'],
   app: {
