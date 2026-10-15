@@ -29,9 +29,20 @@ const tipText = computed(() => (isDark.value ? '#eef1ff' : '#0f172a'))
 
 const chartEl = useTemplateRef<HTMLDivElement>('chart')
 let chart: ECharts | null = null
+// 绘制错误直接上屏(红色),下次成功自动清除:生产排障用,截图即证据
+const errMsg = ref('')
 
 function fmtAxisTime(ts: number): string {
   return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
+// 脏数据只会画残,非法数据会整包抛错导致全白:先过滤
+function cleanPts(pts: any[]): [number, number][] {
+  if (!Array.isArray(pts)) return []
+  return pts.filter(p =>
+    Array.isArray(p) && typeof p[0] === 'number' && typeof p[1] === 'number' &&
+    Number.isFinite(p[0]) && Number.isFinite(p[1])
+  ) as [number, number][]
 }
 
 function ensureChart() {
@@ -42,8 +53,13 @@ function ensureChart() {
 
 function render() {
   if (!ensureChart()) return
-  const hasData = props.services.length > 0
-  chart!.setOption({
+  try {
+    const hasData = props.services.length > 0
+    const spans = (props.spans || []).filter(s =>
+      Array.isArray(s) && typeof s[0] === 'number' && typeof s[1] === 'number' &&
+      Number.isFinite(s[0]) && Number.isFinite(s[1])
+    ) as [number, number][]
+    chart!.setOption({
     grid: { left: 46, right: 16, top: 42, bottom: 62 },
     legend: { top: 0, textStyle: { color: axisColor.value, fontSize: 12 } },
     tooltip: {
@@ -85,10 +101,10 @@ function render() {
         color: svcColor(i), // 图例取顶层 color,不写会和 lineStyle 脱钩
         lineStyle: { width: 2, color: svcColor(i) },
         emphasis: { focus: 'series' },
-        data: s.series
+        data: cleanPts(s.series)
       })),
       // 维护段:灰底 + 压 0 灰线(同名 series legend 自动合并为一个"维护")
-      ...props.spans.map(([s, e]) => ({
+      ...spans.map(([s, e]) => ({
         name: '维护',
         type: 'line',
         symbol: 'none',
@@ -103,6 +119,13 @@ function render() {
       }))
     ]
   }, true)
+    if (errMsg.value) errMsg.value = '' // 成功即清除旧错
+  } catch (e) {
+    console.error('[LatencyChart]', e)
+    errMsg.value = '绘制失败:' + String((e as Error)?.message || e).slice(0, 160)
+    try { chart?.dispose() } catch {}
+    chart = null // 废弃坏实例,下次重建,不抱僵尸
+  }
 }
 
 function refresh() {
@@ -127,5 +150,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="chart" class="w-full" :style="{ height: height + 'px' }"></div>
+  <div class="relative w-full" :style="{ height: height + 'px' }">
+    <div ref="chart" class="absolute inset-0"></div>
+    <div v-if="errMsg" class="absolute inset-0 flex items-center justify-center pointer-events-none px-4">
+      <span class="text-xs text-center" style="color:#ef4444">{{ errMsg }}</span>
+    </div>
+  </div>
 </template>

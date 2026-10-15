@@ -190,7 +190,12 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           <!-- 左:ECharts 可用率柱状 -->
           <div>
-            <div ref="availChart" class="w-full" style="height:220px"></div>
+            <div class="relative w-full" style="height:220px">
+              <div ref="availChart" class="absolute inset-0"></div>
+              <div v-if="availErr" class="absolute inset-0 flex items-center justify-center pointer-events-none px-4">
+                <span class="text-xs text-center" style="color:#ef4444">{{ availErr }}</span>
+              </div>
+            </div>
             <p class="dim mt-2">绿色 ≥99.5% · 黄色 ≥90% · 红色 &lt;90%</p>
           </div>
           <!-- 右:六个监控项,两行 × 三个 -->
@@ -243,7 +248,12 @@
           :spans="maintSpans"
           :height="280"
         />
-        <div v-show="chartMode === 'rep'" ref="repChartEl" class="w-full" style="height:280px"></div>
+        <div v-show="chartMode === 'rep'" class="relative w-full" style="height:280px">
+          <div ref="repChartEl" class="absolute inset-0"></div>
+          <div v-if="repErr" class="absolute inset-0 flex items-center justify-center pointer-events-none px-4">
+            <span class="text-xs text-center" style="color:#ef4444">{{ repErr }}</span>
+          </div>
+        </div>
       </UCard>
 
       <ReportModal v-model:open="reportOpen" />
@@ -463,6 +473,9 @@ const availChartEl = useTemplateRef<HTMLDivElement>('availChart')
 const repChartEl = useTemplateRef<HTMLDivElement>('repChartEl')
 let availChart: ECharts | null = null
 let repChart: ECharts | null = null
+// 绘制错误上屏(截图即证据),成功自动清除
+const availErr = ref('')
+const repErr = ref('')
 
 function fmtAxisTime(ts: number): string {
   return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
@@ -474,10 +487,11 @@ function fmtTipTime(ts: number): string {
 
 function renderAvail() {
   if (!availChartEl.value || !avail.value) return
-  if (!availChart) availChart = echartsInit(availChartEl.value)
-  const ratios = avail.value.buckets.map(b => b.ratio * 100)
-  const min = ratios.length ? Math.min(...ratios) : 100
-  availChart.setOption({
+  if (!availChart || availChart.isDisposed()) availChart = echartsInit(availChartEl.value)
+  try {
+    const ratios = avail.value.buckets.map(b => b.ratio * 100)
+    const min = ratios.length ? Math.min(...ratios) : 100
+    availChart.setOption({
     grid: { left: 42, right: 12, top: 16, bottom: 24 },
     tooltip: {
       trigger: 'axis',
@@ -518,7 +532,14 @@ function renderAvail() {
         }
       }
     }]
-  }, true)
+    }, true)
+    if (availErr.value) availErr.value = ''
+  } catch (e) {
+    console.error('[AvailChart]', e)
+    availErr.value = '绘制失败:' + String((e as Error)?.message || e).slice(0, 160)
+    try { availChart?.dispose() } catch {}
+    availChart = null
+  }
 }
 
 function renderChart() {
@@ -530,7 +551,8 @@ function renderChart() {
 
 function renderRep() {
   const hasData = reportTrend.value.length > 0
-  repChart!.setOption({
+  try {
+    repChart!.setOption({
     grid: { left: 46, right: 16, top: 42, bottom: 62 },
     legend: { top: 0, textStyle: { color: axisColor.value, fontSize: 12 } },
     tooltip: {
@@ -579,7 +601,14 @@ function renderRep() {
         data: reportTrend.value.map(p => [p.ts, p.normal])
       }
     ]
-  }, true)
+    }, true)
+    if (repErr.value) repErr.value = ''
+  } catch (e) {
+    console.error('[RepChart]', e)
+    repErr.value = '绘制失败:' + String((e as Error)?.message || e).slice(0, 160)
+    try { repChart?.dispose() } catch {}
+    repChart = null
+  }
 }
 
 function resizeCharts() {
