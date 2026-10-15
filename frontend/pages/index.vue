@@ -218,7 +218,7 @@
       </UCard>
 
       <!-- Row 3:图表概览(ECharts:延迟多线 / 上报双柱) -->
-      <UCard v-if="hasChart">
+      <UCard v-if="!extrasLoading && !extrasDown">
         <template #header>
           <div class="flex items-start justify-between gap-3 flex-wrap">
             <div>
@@ -235,24 +235,16 @@
             />
           </div>
         </template>
+        <!-- v-show 常驻:实例不销毁,切 tab 只重排,不复活僵尸实例 -->
         <LatencyChart
-          v-if="chartMode === 'lat'"
+          v-show="chartMode === 'lat'"
+          ref="latChartRef"
           :services="latSeries"
           :spans="maintSpans"
           :height="280"
         />
-        <div v-else ref="repChartEl" class="w-full" style="height:280px"></div>
+        <div v-show="chartMode === 'rep'" ref="repChartEl" class="w-full" style="height:280px"></div>
       </UCard>
-
-      <!-- 网关通但暂无曲线数据(新部署攒点中):明示等待,不留白 -->
-      <UAlert
-        v-else-if="!extrasLoading && !extrasDown"
-        color="neutral"
-        variant="soft"
-        icon="i-lucide-loader-circle"
-        title="图表采集中"
-        description="网关刚启动,历史数据攒点中(约 30 秒一个点),曲线稍后自动出现,无需刷新。"
-      />
 
       <ReportModal v-model:open="reportOpen" />
     </template>
@@ -388,7 +380,7 @@ import type { ECharts } from 'echarts/core'
 echartsUse([BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer])
 
 /* ---- 服务可用性 + 图表概览(依赖网关本地采集,失败则隐藏) ---- */
-const avail = ref<{ hours: number; overall_pct?: string; buckets: { ts: number; ratio: number; maint?: boolean }[]; services: any[] } | null>(null)
+const avail = ref<{ hours: number; overall_pct?: string; buckets: { ts: number; ratio: number; maint?: boolean; empty?: boolean }[]; services: any[] } | null>(null)
 const latSeries = ref<{ key: string; name: string; series: [number, number][] }[]>([])
 // 维护段(后端合并好的 [start,end] 毫秒区间,空为 null):柱满格灰 / 线压 0 灰
 const maintSpans = ref<[number, number][]>([])
@@ -447,8 +439,6 @@ const reportSnapshots = computed<TimelineItem[] | null>(() => {
   return out.reverse() // 最新在前
 })
 
-const hasChart = computed(() => latSeries.value.length > 0 || reportTrend.value.length > 0)
-
 // 延迟 / 上报两档(上报口径见 isMaiDown /api/bot reports:近1小时异常/正常上报数)
 const chartMode = ref<'lat' | 'rep'>('lat')
 const chartTabs = [
@@ -497,7 +487,8 @@ function renderAvail() {
       formatter: (ps: any) => {
         const p = Array.isArray(ps) ? ps[0] : ps
         const b = avail.value!.buckets[p.dataIndex]
-        if (b?.maint) return `${fmtTipTime(p.value[0])}<br/>常规维护中(04:00-07:00 GMT+8)`
+        if (!b || b.empty || p.value[1] == null) return `${fmtTipTime(p.value[0])}<br/>暂无采集`
+        if (b.maint) return `${fmtTipTime(p.value[0])}<br/>常规维护中(04:00-07:00 GMT+8)`
         return `${fmtTipTime(p.value[0])}<br/>可用率 <b>${Number(p.value[1]).toFixed(1)}%</b>`
       }
     },
@@ -516,24 +507,29 @@ function renderAvail() {
     },
     series: [{
       type: 'bar',
-      data: avail.value.buckets.map(b => [b.ts, b.maint ? 100 : +(b.ratio * 100).toFixed(1)]),
+      data: avail.value.buckets.map(b => [b.ts, b.empty ? null : (b.maint ? 100 : +(b.ratio * 100).toFixed(1))]),
       barWidth: '60%',
       itemStyle: {
         borderRadius: [3, 3, 0, 0],
-        color: (p: any) => (avail.value!.buckets[p.dataIndex]?.maint ? MAINT_GRAY : availHex(p.value[1]))
+        color: (p: any) => {
+          const b = avail.value!.buckets[p.dataIndex]
+          if (!b || b.empty || p.value[1] == null) return 'transparent'
+          return b.maint ? MAINT_GRAY : availHex(p.value[1])
+        }
       }
     }]
   }, true)
 }
 
 function renderChart() {
-  if (chartMode.value !== 'rep') return
-  if (!repChartEl.value || !reportTrend.value.length) return
-  if (!repChart) repChart = echartsInit(repChartEl.value)
+  if (chartMode.value !== 'rep' || !repChartEl.value) return
+  // 复活守卫:实例被 dispose 后变量置空,下次重建而非复用僵尸
+  if (!repChart || repChart.isDisposed()) repChart = echartsInit(repChartEl.value)
   return renderRep()
 }
 
 function renderRep() {
+  const hasData = reportTrend.value.length > 0
   repChart!.setOption({
     grid: { left: 46, right: 16, top: 42, bottom: 62 },
     legend: { top: 0, textStyle: { color: axisColor.value, fontSize: 12 } },
@@ -560,6 +556,13 @@ function renderRep() {
       { type: 'inside' },
       { type: 'slider', height: 22, bottom: 6, borderColor: splitColor.value, textStyle: { color: axisColor.value, fontSize: 10 } }
     ],
+    // 无数据也画框:中央空态字,不留白
+    graphic: hasData ? [] : [{
+      type: 'text',
+      left: 'center',
+      top: 'middle',
+      style: { text: '数据采集中…', fill: axisColor.value, fontSize: 13 }
+    }],
     series: [
       {
         name: '异常上报',
@@ -585,7 +588,19 @@ function resizeCharts() {
 }
 
 watch([avail, isDark], () => nextTick(renderAvail))
-watch([reportTrend, chartMode, isDark], () => nextTick(renderChart))
+watch([reportTrend, isDark], () => nextTick(renderChart))
+// 切 tab 时显式重排:隐藏容器尺寸为 0,切回来必须 resize 否则白板
+const latChartRef = useTemplateRef<{ refresh: () => void }>('latChartRef')
+watch(chartMode, () => {
+  nextTick(() => {
+    if (chartMode.value === 'rep') {
+      renderChart()
+      repChart?.resize()
+    } else {
+      latChartRef.value?.refresh()
+    }
+  })
+})
 
 onMounted(() => {
   nextTick(() => { renderAvail(); renderChart() })

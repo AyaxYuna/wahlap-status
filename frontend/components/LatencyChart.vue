@@ -34,10 +34,16 @@ function fmtAxisTime(ts: number): string {
   return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
+function ensureChart() {
+  if (!chartEl.value) return false
+  if (!chart || chart.isDisposed()) chart = echartsInit(chartEl.value)
+  return true
+}
+
 function render() {
-  if (!chartEl.value || !props.services.length) return
-  if (!chart) chart = echartsInit(chartEl.value)
-  chart.setOption({
+  if (!ensureChart()) return
+  const hasData = props.services.length > 0
+  chart!.setOption({
     grid: { left: 46, right: 16, top: 42, bottom: 62 },
     legend: { top: 0, textStyle: { color: axisColor.value, fontSize: 12 } },
     tooltip: {
@@ -63,6 +69,13 @@ function render() {
       { type: 'inside' },
       { type: 'slider', height: 22, bottom: 6, borderColor: splitColor.value, textStyle: { color: axisColor.value, fontSize: 10 } }
     ],
+    // 无数据也画框:中央空态字,不留白
+    graphic: hasData ? [] : [{
+      type: 'text',
+      left: 'center',
+      top: 'middle',
+      style: { text: '数据采集中…', fill: axisColor.value, fontSize: 13 }
+    }],
     series: [
       ...props.services.map((s, i) => ({
         name: s.name,
@@ -92,6 +105,13 @@ function render() {
   }, true)
 }
 
+function refresh() {
+  render()
+  chart?.resize()
+}
+
+defineExpose({ refresh })
+
 function resize() { chart?.resize() }
 
 watch([() => props.services, () => props.spans, isDark], () => nextTick(render))
@@ -102,6 +122,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', resize)
   chart?.dispose()
+  chart = null
 })
 </script>
 

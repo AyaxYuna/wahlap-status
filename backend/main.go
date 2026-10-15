@@ -794,9 +794,9 @@ func main() {
 			if totB[i] > 0 {
 				ratio = float64(okB[i]) / float64(totB[i])
 			}
-			// 维护柱:过半为维护点即整柱置灰,前端画满格灰
+			// 维护柱:过半为维护点即整柱置灰,前端画满格灰;空桶标 empty,前端留白不断造 100%
 			maint := maintB[i] > 0 && maintB[i]*2 >= maintB[i]+totB[i]
-			buckets[i] = map[string]any{"ts": start + int64(float64(i)*span/nBuckets), "ratio": ratio, "maint": maint}
+			buckets[i] = map[string]any{"ts": start + int64(float64(i)*span/nBuckets), "ratio": ratio, "maint": maint, "empty": totB[i] == 0 && maintB[i] == 0}
 		}
 		svcs := []map[string]any{}
 		overallOk, overallTot := 0, 0

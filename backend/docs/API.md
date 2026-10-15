@@ -33,7 +33,7 @@
 | GET | `/api/incidents` | 故障事件:`{incidents[{start_ts,end_ts,duration_sec,worst_verdict,verdict_text,ongoing}],count}`。verdict 非 `normal` 的连续点位即记为一段事件 |
 | GET | `/api/latency/stats?hours=24` | 延迟分位:`{min,p50,p90,p99,max,avg,current,count}`,`hours` 最大 168 |
 | GET | `/api/reports/trend?limit=288` | 上报趋势:`{trend[{ts,anomaly,normal}]}`,按时间正序,方便直接画线 |
-| GET | `/api/services/availability?hours=12` | 各服务可用率:`{hours,buckets[{ts,ratio,maint}],services[...],overall_pct}`(`maint` 柱前端画满格灰;`overall_pct` 为全服务总可用率,与 `history/summary` 的 `uptime_pct` 同值,维护点位不计入) |
+| GET | `/api/services/availability?hours=12` | 各服务可用率:`{hours,buckets[{ts,ratio,maint,empty}],services[...],overall_pct}`(`maint` 柱前端画满格灰,`empty` 桶前端留白;`overall_pct` 为全服务总可用率,与 `history/summary` 的 `uptime_pct` 同值,维护点位不计入) |
 | GET | `/api/services/latency?hours=24` | 各服务延迟序列(自动降采样):`{services[{key,name,series[[ts,ms]]}],maint_spans[[start,end]]}`,维护段前端压 0 灰线 |
 | GET | `/api/overview` | 聚合看板:状态原字段 + `history_summary` + `latency_stats` + `ongoing_incidents`,首页一次请求即可渲染 |
 
